@@ -24,7 +24,7 @@ from dotenv import load_dotenv
 #         db.close()
 
 load_dotenv()  # Load environment variables from .envfile      
-DATABASE_URL = "postgresql://e_payment_system_user:jfZSfISYaNMndK5V6rKr1QIooZpiRlea@dpg-d77s3o94tr6s73d64lrg-a.ohio-postgres.render.com/e_payment_system"
+DATABASE_URL = os.getenv("postgresql://...")
 # Fix for Render (important)
 if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
