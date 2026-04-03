@@ -1,5 +1,5 @@
 import MainLayout from "../../Layouts/MainLayout";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import axios from "../../api/axios"
 
 
@@ -14,27 +14,46 @@ const [level_name,setLevelName] = useState("")
 
 const token = localStorage.getItem("token")
 
-// Load Levels
-const loadLevels = async()=>{
-const res = await axios.get("/approval-level/all",{
-headers:{Authorization:`Bearer ${token}`}
-})
-setLevels(res.data)
-}
+// // Load Levels
+// const loadLevels = async()=>{
+// const res = await axios.get("/approval-level/all",{
+// headers:{Authorization:`Bearer ${token}`}
+// })
+// setLevels(res.data)
+// }
+
+// // Load Roles
+// const loadRoles = async()=>{
+// const res = await axios.get("/roles/list",{
+// headers:{Authorization:`Bearer ${token}`}
+// })
+// setRoles(res.data)
+// }
+
+// useEffect(()=>{
+// loadLevels()
+// loadRoles()
+// },[])
+
+const loadLevels = useCallback(async () => {
+  const res = await axios.get("/approval-level/all", {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  setLevels(res.data);
+}, [token]);
 
 // Load Roles
-const loadRoles = async()=>{
-const res = await axios.get("/roles/list",{
-headers:{Authorization:`Bearer ${token}`}
-})
-setRoles(res.data)
-}
+const loadRoles = useCallback(async () => {
+  const res = await axios.get("/roles/list", {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  setRoles(res.data);
+}, [token]);
 
-useEffect(()=>{
-loadLevels()
-loadRoles()
-},[])
-
+useEffect(() => {
+  loadLevels();
+  loadRoles();
+}, [loadLevels, loadRoles]);
 
 // Create Level
 const createLevel = async()=>{

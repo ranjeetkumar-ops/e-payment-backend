@@ -36,7 +36,7 @@ function ApprovalDashboard(){
       setIsIdAsc(!isIdAsc);
       };
 
-   const [isStatusAsc, setIsStatusAsc] = useState(true);
+   // const [isStatusAsc, setIsStatusAsc] = useState(true);
 
    
 

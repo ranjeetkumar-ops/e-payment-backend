@@ -1,7 +1,7 @@
 import axios from "axios";
 
 const instance = axios.create({
-  baseURL: "https://e-payment-backend-2rwj.onrender.com/"
+  baseURL:"https://e-payment-backend-2rwj.onrender.com"
 })
 
 instance.interceptors.request.use((config)=>{
