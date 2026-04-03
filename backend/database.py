@@ -23,8 +23,11 @@ from dotenv import load_dotenv
 #     finally:
 #         db.close()
 
-load_dotenv()  # Load environment variables from .envfile      
-DATABASE_URL = os.getenv("postgresql://...")
+
+load_dotenv()  
+DATABASE_URL = os.getenv("DATABASE_URL")
+# Load environment variables from .envfile      
+
 # Fix for Render (important)
 if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
