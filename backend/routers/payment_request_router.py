@@ -402,6 +402,7 @@ def pending_approval(
             ON pr.current_level = al.level_no
         JOIN user_warehouses uw 
             ON uw.warehouse_id = pr.warehouse_id
+                           
         WHERE pr.status = 'Pending'
         AND al.role_id = :role_id
         AND uw.user_id = :user_id

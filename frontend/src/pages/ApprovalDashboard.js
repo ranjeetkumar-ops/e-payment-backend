@@ -123,7 +123,7 @@ function ApprovalDashboard(){
                             : req.status}
                         </td>
                         
-                            <td>{req.invoice_numbers?.map((inv, i) => (
+                        <td>{req.invoice_numbers?.map((inv, i) => (
                                  <span
                                  key={i}
                                  style={{

@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from backend.database import engine, Base
+import os
 
 # ⭐ Import Models Properly
 from backend.models.user_model import User
@@ -21,17 +22,8 @@ from backend.routers import attachment_router
 
 
 
-
-
-
 Base.metadata.create_all(bind=engine)
 
-import os
-port = int(os.environ.get("PORT", 10000))
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run("backend.main:app", host="0.0.0.0", port=port)
 
 if not os.path.exists("uploads"):
     os.makedirs("uploads")

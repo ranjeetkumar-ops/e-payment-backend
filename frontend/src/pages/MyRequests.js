@@ -135,7 +135,8 @@ req.status === "Rejected" ? "#ef4444" :
   {item.invoice_numbers?.map((inv, i) => (
                     <span
                       key={i} */}
-<td>{req.invoice_numbers?.map((inv, i) => (
+<td>
+{req.invoice_numbers?.map((inv, i) => (
                       <span
                       key={i}
                       style={{

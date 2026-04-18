@@ -1,7 +1,9 @@
 import axios from "axios";
 
 const instance = axios.create({
-  baseURL:"https://e-payment-backend-2rwj.onrender.com"
+
+  baseURL:process.env.REACT_APP_API_URL,
+  // baseURL:"https://e-payment-backend-2rwj.onrender.com"
     //  baseURL:"http://127.0.0.1:8000"
   
 })
