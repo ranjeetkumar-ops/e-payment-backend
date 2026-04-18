@@ -12,7 +12,6 @@ useEffect(()=>{
     navigate("/home")
   }
 }, [navigate])
-
 const [username,setUsername] = useState("")
 const [password,setPassword] = useState("")
 const [error,setError] = useState("")
