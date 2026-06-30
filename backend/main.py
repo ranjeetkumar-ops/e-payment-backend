@@ -46,9 +46,6 @@ def create_support_tables():
 def seed_first_admin():
     db = SessionLocal()
     try:
-        if db.query(User).first():
-            return
-
         role = db.query(Role).filter(Role.id == 1).first()
         if not role:
             role = Role(id=1, role_name="Admin", level_no=1)
@@ -68,25 +65,40 @@ def seed_first_admin():
 
         db.flush()
 
-        admin_user = User(
-            username=os.getenv("SEED_ADMIN_USERNAME", "admin"),
-            name=os.getenv("SEED_ADMIN_NAME", "Admin"),
-            email=os.getenv("SEED_ADMIN_EMAIL", "admin@example.com"),
-            password=os.getenv("SEED_ADMIN_PASSWORD", "admin123"),
-            role_id=role.id,
-            warehouse_id=warehouse.id,
-            is_active=True,
-        )
-        db.add(admin_user)
+        seed_username = os.getenv("SEED_ADMIN_USERNAME", "Test1")
+        admin_user = db.query(User).filter(User.username == seed_username).first()
+
+        if not admin_user:
+            admin_user = User(username=seed_username)
+            db.add(admin_user)
+
+        admin_user.name = os.getenv("SEED_ADMIN_NAME", "Test User")
+        admin_user.email = os.getenv("SEED_ADMIN_EMAIL", "test1@example.com")
+        admin_user.password = os.getenv("SEED_ADMIN_PASSWORD", "Test@321")
+        admin_user.role_id = role.id
+        admin_user.warehouse_id = warehouse.id
+        admin_user.is_active = True
+
         db.flush()
 
-        db.execute(
+        existing_assignment = db.execute(
             text("""
-                INSERT INTO user_warehouses (user_id, warehouse_id)
-                VALUES (:user_id, :warehouse_id)
+                SELECT 1
+                FROM user_warehouses
+                WHERE user_id = :user_id AND warehouse_id = :warehouse_id
             """),
             {"user_id": admin_user.id, "warehouse_id": warehouse.id},
-        )
+        ).fetchone()
+
+        if not existing_assignment:
+            db.execute(
+                text("""
+                    INSERT INTO user_warehouses (user_id, warehouse_id)
+                    VALUES (:user_id, :warehouse_id)
+                """),
+                {"user_id": admin_user.id, "warehouse_id": warehouse.id},
+            )
+
         db.commit()
     finally:
         db.close()

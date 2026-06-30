@@ -9,6 +9,17 @@ from backend.models.role_model import Role
 from backend.models.warehouse_model import Warehouse
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
+
+def password_matches(plain_password: str, stored_password: str) -> bool:
+    if plain_password == stored_password:
+        return True
+
+    try:
+        return verify_password(plain_password, stored_password)
+    except Exception:
+        return False
+
+
 @router.post("/login")
 def login(
     form_data: OAuth2PasswordRequestForm = Depends(),
@@ -20,9 +31,7 @@ def login(
     if not user:
         raise HTTPException(status_code=400, detail="Invalid Username")
 
-    # if not verify_password(form_data.password, user.password):
-    #     raise HTTPException(status_code=400, detail="Invalid Password")
-    if form_data.password != user.password:
+    if not password_matches(form_data.password, user.password):
         raise HTTPException(status_code=400, detail="Invalid Password")
     
       # ⭐ FETCH ROLE (IMPORTANT FIX)
