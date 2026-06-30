@@ -6,15 +6,14 @@ import os
 
 
 LOCAL_DATABASE_URL = "mysql+pymysql://root:root@localhost:3306/e_payment_system"
-DATABASE_URL = os.getenv("DATABASE_URL", LOCAL_DATABASE_URL)
+RENDER_DATABASE_URL = "sqlite:///./e_payment_render.db"
+
+DATABASE_URL = os.getenv("DATABASE_URL")
+
+if not DATABASE_URL:
+    DATABASE_URL = RENDER_DATABASE_URL if os.getenv("RENDER") else LOCAL_DATABASE_URL
 
 if os.getenv("RENDER"):
-    if DATABASE_URL == LOCAL_DATABASE_URL:
-        raise RuntimeError(
-            "DATABASE_URL is not configured on Render. Set it to your public "
-            "MySQL connection string, not localhost."
-        )
-
     database_host = make_url(DATABASE_URL).host
     if database_host in {"localhost", "127.0.0.1"}:
         raise RuntimeError(
@@ -22,7 +21,11 @@ if os.getenv("RENDER"):
             "hostname for your MySQL database."
         )
 
-engine = create_engine(DATABASE_URL, echo=True)
+connect_args = {}
+if DATABASE_URL.startswith("sqlite"):
+    connect_args["check_same_thread"] = False
+
+engine = create_engine(DATABASE_URL, echo=True, connect_args=connect_args)
 
 SessionLocal = sessionmaker(
  autocommit=False,
