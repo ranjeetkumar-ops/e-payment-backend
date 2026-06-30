@@ -3,18 +3,46 @@ from backend.models.user_model import User
 from backend.utils.security import hash_password
 from fastapi import HTTPException
 from backend.models.role_model import Role
+from backend.models.warehouse_model import Warehouse
+from sqlalchemy import text
 
 def create_user(db: Session, user):
+    if user.role_id:
+        role = db.query(Role).filter(Role.id == user.role_id).first()
+        if not role:
+            raise HTTPException(status_code=400, detail="Invalid Role ID")
+
+    if user.warehouse_id:
+        warehouse = db.query(Warehouse).filter(Warehouse.id == user.warehouse_id).first()
+        if not warehouse:
+            raise HTTPException(status_code=400, detail="Invalid Warehouse ID")
+
     db_user = User(
         username=user.username,
         name=user.name,
         email=user.email,
         password=hash_password(user.password),
-        role_id=user.role_id
+        role_id=user.role_id,
+        warehouse_id=user.warehouse_id
     )
     db.add(db_user)
     db.commit()
     db.refresh(db_user)
+
+    if user.warehouse_id:
+        db.execute(
+            text("""
+                INSERT INTO user_warehouses (user_id, warehouse_id)
+                SELECT :user_id, :warehouse_id
+                WHERE NOT EXISTS (
+                    SELECT 1 FROM user_warehouses
+                    WHERE user_id = :user_id AND warehouse_id = :warehouse_id
+                )
+            """),
+            {"user_id": db_user.id, "warehouse_id": user.warehouse_id}
+        )
+        db.commit()
+
     return db_user
 
 
@@ -67,6 +95,9 @@ def update_user(db: Session, user_id: int, data):
     if data.username:
         user.username = data.username
 
+    if data.name:
+        user.name = data.name
+
     # ⭐ Email
     if data.email:
         user.email = data.email
@@ -79,6 +110,25 @@ def update_user(db: Session, user_id: int, data):
             raise HTTPException(status_code=400, detail="Invalid Role ID")
 
         user.role_id = data.role_id
+
+    if data.warehouse_id:
+        warehouse = db.query(Warehouse).filter(Warehouse.id == data.warehouse_id).first()
+
+        if not warehouse:
+            raise HTTPException(status_code=400, detail="Invalid Warehouse ID")
+
+        user.warehouse_id = data.warehouse_id
+        db.execute(
+            text("""
+                INSERT INTO user_warehouses (user_id, warehouse_id)
+                SELECT :user_id, :warehouse_id
+                WHERE NOT EXISTS (
+                    SELECT 1 FROM user_warehouses
+                    WHERE user_id = :user_id AND warehouse_id = :warehouse_id
+                )
+            """),
+            {"user_id": user.id, "warehouse_id": data.warehouse_id}
+        )
 
     # ⭐ Active Status
     if data.is_active is not None:

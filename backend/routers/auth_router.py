@@ -42,9 +42,9 @@ def login(
         "name": user.name,
         "user_id": user.id,
         "role": role.role_name if role else None ,  # ⭐ SAFE RETURN
-        "warehouse": warehouse.warehouse_id  if Warehouse else None ,
-        "warehouse_name":warehouse.warehouse_name if Warehouse else None,
-        "warehouse_id":warehouse.id
+        "warehouse": warehouse.warehouse_id if warehouse else None,
+        "warehouse_name": warehouse.warehouse_name if warehouse else None,
+        "warehouse_id": warehouse.id if warehouse else None
          
         
     }

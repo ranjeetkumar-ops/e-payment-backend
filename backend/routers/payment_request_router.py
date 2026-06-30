@@ -14,6 +14,8 @@ from backend.models.invoice_model import Invoice
 from backend.models.invoice_item_model import InvoiceItem
 from backend.models.attachment_model import Attachment
 from backend.models.role_model import Role
+from backend.models.approval_level_model import ApprovalLevel
+from backend.models.user_model import User
 from backend.schemas.payment_request_schema import PaymentRequestCreate
 from backend.dependencies.auth_dependency import get_current_user
 
@@ -32,25 +34,93 @@ def my_requests(
         Vendor.vendor_name,
         Vendor.vendor_id,
         Warehouse.warehouse_name,
-        Warehouse.warehouse_id
+        Warehouse.warehouse_id,
+        User.name
     ).join(
         Vendor, PaymentRequest.vendor_id == Vendor.id
     ).join(
         Warehouse, PaymentRequest.warehouse_id == Warehouse.id
     ).outerjoin(
-        Invoice, Invoice.payment_request_id == PaymentRequest.id
+        User, PaymentRequest.created_by == User.id
     ).filter(
         PaymentRequest.created_by == user_id
     ).all()
 
     result = []
 
-    for pr, vendor_name, vendor_code, wh_name, wh_code in data:
+    for pr, vendor_name, vendor_code, wh_name, wh_code, requester_name in data:
         
         # 🔥 Status logic
         status_text = pr.status
-        if pr.status == "Submitted":
-            status_text = f"Pending at {pr.current_level}"
+        if pr.status in ("Submitted", "Pending"):
+            status_text = f"Pending at L{pr.current_level}"
+
+        next_approval = None
+        if pr.status in ("Submitted", "Pending") and pr.current_level:
+            level = db.query(
+                ApprovalLevel.level_no,
+                ApprovalLevel.level_name,
+                Role.role_name,
+                ApprovalLevel.role_id
+            ).join(
+                Role, ApprovalLevel.role_id == Role.id
+            ).filter(
+                ApprovalLevel.level_no == pr.current_level
+            ).first()
+
+            if level:
+                approvers = db.execute(text("""
+                    SELECT DISTINCT u.name
+                    FROM users u
+                    JOIN user_warehouses uw ON uw.user_id = u.id
+                    WHERE u.role_id = :role_id
+                    AND uw.warehouse_id = :warehouse_id
+                    AND u.is_active = 1
+                    ORDER BY u.name
+                """), {
+                    "role_id": level.role_id,
+                    "warehouse_id": pr.warehouse_id
+                }).fetchall()
+
+                next_approval = {
+                    "level_no": level.level_no,
+                    "level_name": level.level_name,
+                    "role_name": level.role_name,
+                    "approvers": [row.name for row in approvers]
+                }
+
+        rejected_by = None
+        if pr.status == "Rejected":
+            rejected = db.execute(text("""
+                SELECT u.name, r.role_name, pa.level_no, al.level_name, pa.remarks
+                FROM payment_approvals pa
+                JOIN users u ON pa.approved_by = u.id
+                LEFT JOIN roles r ON u.role_id = r.id
+                LEFT JOIN approval_levels al ON pa.level_no = al.level_no
+                WHERE pa.payment_request_id = :request_id
+                AND pa.status = 'Rejected'
+                ORDER BY pa.action_at DESC, pa.id DESC
+                LIMIT 1
+            """), {
+                "request_id": pr.id
+            }).fetchone()
+
+            if rejected:
+                rejected_by = {
+                    "name": rejected.name,
+                    "role_name": rejected.role_name,
+                    "level_no": rejected.level_no,
+                    "level_name": rejected.level_name,
+                    "reason": rejected.remarks
+                }
+            elif pr.reject_reason:
+                rejected_by = {
+                    "name": None,
+                    "role_name": None,
+                    "level_no": pr.current_level,
+                    "level_name": None,
+                    "reason": pr.reject_reason
+                }
 
         # 🔥 Invoice count
         invoices = db.query(Invoice.invoice_no).filter(
@@ -68,9 +138,15 @@ def my_requests(
             "id": pr.id,
             "request_code": pr.request_code,
             "vendor": vendor_name,
+            "requester": requester_name,
             "status": status_text,
+            "next_approval": next_approval,
+            "rejected_by": rejected_by,
             "invoice_numbers": invoice_numbers,
-            "amount": total_amount
+            "amount": total_amount,
+            "utr_number": pr.utr_number,
+            "paid_at": pr.paid_at,
+            "Submitted_at":pr.submitted_at
         })
 
     return result
@@ -117,43 +193,56 @@ def list_payment_requests(
     db: Session = Depends(get_db),
     user = Depends(get_current_user)
 ):
-    data = db.query(
+    role_name = user.role.role_name if user.role else ""
+
+    query = db.query(
         PaymentRequest,
         Vendor.vendor_name,
         Vendor.vendor_id,
         Warehouse.warehouse_name,
-        Warehouse.warehouse_id
+        Warehouse.warehouse_id,
+        User.name
     ).join(
         Vendor, PaymentRequest.vendor_id == Vendor.id
     ).join(
         Warehouse, PaymentRequest.warehouse_id == Warehouse.id
-    ).join(
-     Invoice, Invoice.payment_request_id == PaymentRequest.id, isouter=True
-    ).all()
+    ).outerjoin(
+        User, PaymentRequest.created_by == User.id
+    )
     
-    if user.role == "Accounts":
-        data = data.filter(PaymentRequest.status == "pending_payment")
+    if role_name == "Accounts":
+        query = query.filter(PaymentRequest.status == "pending_payment")
+    elif role_name != "Admin":
+        query = query.filter(PaymentRequest.created_by == user.id)
+
+    data = query.all()
 
     result = []
 
-    for pr, vendor_name, vendor_code, wh_name, wh_code in data:
+    for pr, vendor_name, vendor_code, wh_name, wh_code, requester_name in data:
         
         invoices = db.query(Invoice.invoice_no).filter(
             Invoice.payment_request_id == pr.id
         ).all()
 
         invoice_numbers = [inv[0] for inv in invoices]
+        amount = float(pr.grand_total or 0)
+
         result.append({
             "id": pr.id,
             "request_code": pr.request_code,
             "vendor": vendor_name,
+            "requester": requester_name,
             "vendor_code": vendor_code,
             "invoice_numbers":invoice_numbers,
             "warehouse": wh_name,
             "warehouse_code": wh_code,
-            "grand_total": float(pr.grand_total),
+            "grand_total": amount,
+            "amount": amount,
             "status": pr.status,
-            "Submitted at":pr.submitted_at,
+            "utr_number": pr.utr_number,
+            "paid_at": pr.paid_at,
+            "Submitted_at":pr.submitted_at,
             "invoice_count": db.query(Invoice).filter(Invoice.payment_request_id == pr.id).count()
 
 
@@ -220,9 +309,6 @@ def update_payment(
     db: Session = Depends(get_db),
     user = Depends(get_current_user)
 ):
-    print("DEBUG ROLE:", user.role)
-    print("DEBUG ROLE_ID:", user.role_id)
-
     req = db.query(PaymentRequest).filter(
         PaymentRequest.id == request_id
     ).first()
@@ -294,6 +380,19 @@ def approve_request(
 
     warehouse_id = request.headers.get("warehouse")
 
+    if not warehouse_id:
+        raise HTTPException(400, "Warehouse not selected")
+
+    if str(warehouse_id).isdigit():
+        warehouse_id = int(warehouse_id)
+    else:
+        warehouse_id = db.execute(text("""
+            SELECT id FROM warehouses WHERE warehouse_id = :code
+        """), {"code": warehouse_id}).scalar()
+
+    if not warehouse_id:
+        raise HTTPException(400, "Invalid warehouse")
+
     req = db.query(PaymentRequest).filter(
         PaymentRequest.id == request_id,
         PaymentRequest.warehouse_id == warehouse_id   # ⭐ IMPORTANT
@@ -357,7 +456,8 @@ def approve_request(
 def reject_request(
         request_id:int,
         reason:str,
-        db:Session = Depends(get_db)):
+        db:Session = Depends(get_db),
+        user = Depends(get_current_user)):
 
     req = db.query(PaymentRequest).filter(
         PaymentRequest.id == request_id
@@ -368,6 +468,17 @@ def reject_request(
 
     req.status = "Rejected"
     req.reject_reason = reason
+
+    db.execute(text("""
+        INSERT INTO payment_approvals
+        (payment_request_id, level_no, approved_by, status, remarks, action_at)
+        VALUES (:rid, :lvl, :uid, 'Rejected', :remarks, NOW())
+    """), {
+        "rid": request_id,
+        "lvl": req.current_level,
+        "uid": user.id,
+        "remarks": reason
+    })
 
     db.commit()
 
@@ -417,6 +528,55 @@ def pending_approval(
     result = [dict(row._mapping) for row in data]
 
     return result
+
+
+@router.get("/edit/{id}")
+def get_payment_request_for_edit(id: int, db: Session = Depends(get_db)):
+
+    pr = db.query(PaymentRequest).filter(PaymentRequest.id == id).first()
+
+    if not pr:
+        raise HTTPException(404, "Request not found")
+
+    invoices = db.query(Invoice).filter(
+        Invoice.payment_request_id == id
+    ).all()
+
+    invoice_list = []
+
+    for inv in invoices:
+        items = db.query(InvoiceItem).filter(
+            InvoiceItem.invoice_id == inv.id
+        ).all()
+
+        attachment = db.query(Attachment).filter(
+            Attachment.invoice_id == inv.id
+        ).first()
+
+        invoice_list.append({
+            "invoice_id": inv.id,
+            "invoice_no": inv.invoice_no,
+            "invoice_date": inv.invoice_date,
+            "gst_percent": float(inv.gst_percent),
+            "attachment": attachment.file_path if attachment else None,
+            "items": [
+                {
+                    "description": item.description,
+                    "qty": item.qty,
+                    "price": float(item.price),
+                } for item in items
+            ],
+        })
+
+    return {
+        "id": pr.id,
+        "request_code": pr.request_code,
+        "vendor_id": pr.vendor_id,
+        "warehouse_id": pr.warehouse_id,
+        "status": pr.status,
+        "grand_total": float(pr.grand_total),
+        "invoices": invoice_list,
+    }
 
 
 @router.get("/request-details/{id}")

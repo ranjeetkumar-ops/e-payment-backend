@@ -84,6 +84,31 @@ def add_invoice(data: InvoiceCreate, db: Session = Depends(get_db)):
     return { "id": inv.id, "message": "Invoice Added Successfully"}
 
 
+@router.delete("/clear-request/{request_id}")
+def clear_request_invoices(request_id: int, db: Session = Depends(get_db)):
+    req = db.query(PaymentRequest).filter(PaymentRequest.id == request_id).first()
+
+    if not req:
+        raise HTTPException(404, "Payment Request Not Found")
+
+    if req.status != "Draft":
+        raise HTTPException(400, "Cannot edit invoice. PR already submitted.")
+
+    invoices = db.query(Invoice).filter(
+        Invoice.payment_request_id == request_id
+    ).all()
+
+    for inv in invoices:
+        db.query(Attachment).filter(Attachment.invoice_id == inv.id).delete()
+        db.query(InvoiceItem).filter(InvoiceItem.invoice_id == inv.id).delete()
+        db.delete(inv)
+
+    req.grand_total = 0
+    db.commit()
+
+    return {"message": "Existing draft invoices cleared"}
+
+
 
 
 @router.get("/by-request/{request_id}")

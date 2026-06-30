@@ -20,11 +20,6 @@ from backend.routers import approval_level_router
 from fastapi.staticfiles import StaticFiles
 from backend.routers import attachment_router
 
-
-
-Base.metadata.create_all(bind=engine)
-
-
 if not os.path.exists("uploads"):
     os.makedirs("uploads")
 
