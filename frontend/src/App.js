@@ -1,4 +1,4 @@
-import { Routes, Route } from "react-router-dom";
+import { Navigate, Routes, Route } from "react-router-dom";
 import AdminDashboard from "./pages/AdminDashboard";
 import AdminUsers from "./pages/admin/AdminUsers";
 import AdminRoles from "./pages/admin/AdminRoles";
@@ -9,6 +9,7 @@ import MyRequests  from "./pages/MyRequests";
 import Approvals from  "./pages/Approvals";
 import RequestDetails from "./pages/RequestDetails";  
 import Finance from "./pages/Finance";
+import Reports from "./pages/Reports";
 import Login from "./pages/Login"
 
 //import { isLoggedIn } from "./utils/auth"
@@ -24,6 +25,7 @@ function App() {
     <Routes>
 
 <Route path="/" element={<Login/>} />
+<Route path="/login" element={<Login/>} />
 
 <Route path="/home" element={<PrivateRoute><Home/></PrivateRoute>} />
 <Route path="/submit" element={<PrivateRoute><SubmitRequest/></PrivateRoute>} />
@@ -31,12 +33,14 @@ function App() {
 <Route path="/approvals" element={<PrivateRoute><Approvals/></PrivateRoute>} />
 <Route path="/requestdetails" element={<PrivateRoute><RequestDetails/></PrivateRoute>} />
 <Route path="/finance" element={<PrivateRoute><Finance/></PrivateRoute>}/>
+<Route path="/reports" element={<PrivateRoute><Reports/></PrivateRoute>}/>
 <Route path="/permissions" element={<PrivateRoute><AdminDashboard/></PrivateRoute>} />
 <Route path="/roles" element={<PrivateRoute><AdminRoles/></PrivateRoute>} />
 <Route path="/users" element={<PrivateRoute><AdminUsers/></PrivateRoute>} />
 <Route path="/notifications" element={<PrivateRoute><Home/></PrivateRoute>}/>
 <Route path="/approval" element={<ApprovalDashboard/>}/>
 <Route path="/approval-level" element={<ApprovalLevelPage/>}/>
+<Route path="*" element={<Navigate to="/" replace />} />
 </Routes>
    </div>
     

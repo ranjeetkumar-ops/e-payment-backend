@@ -50,7 +50,7 @@ const selectWarehouse = (id, name)=>{
 } 
 const handleLogout = ()=>{
   localStorage.clear()
-  navigate("/")
+  navigate("/login")
 }
 
 useEffect(()=>{
