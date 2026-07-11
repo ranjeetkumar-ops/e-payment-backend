@@ -10,7 +10,7 @@ const [roles,setRoles] = useState([]);
 
 const loadRoles = async()=>{
     try{
-const res = await axios.get("http://127.0.0.1:8000/roles/list");
+const res = await axios.get("/roles/list");
 console.log("User Data:",res.data);
 setRoles(res.data);
     }
@@ -26,7 +26,7 @@ loadRoles();
 },[])
 
 const saveRole = async()=>{
-await axios.post("http://127.0.0.1:8000/roles/create",{
+await axios.post("/roles/create",{
 role_name:roleName,
 level_no:level
 });

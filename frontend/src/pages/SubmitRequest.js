@@ -1,10 +1,15 @@
 import MainLayout from "../Layouts/MainLayout";
-import { useState, useRef ,useEffect} from "react";
+import { useState, useRef ,useEffect, useCallback} from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import Swal from "sweetalert2";
-import axios from "../api/axios";
+import axios, { buildApiUrl } from "../api/axios";
 function SubmitRequest(){
 
+const location = useLocation();
+const navigate = useNavigate();
 const [prId,setPrId] = useState(null);
+const [prCode,setPrCode] = useState("");
+const [isEditMode,setIsEditMode] = useState(false);
 const [vendor,setVendor] = useState("");
 const [vendorList,setVendorList] = useState([])
 
@@ -13,32 +18,54 @@ useEffect
 (()=>{ loadData()},[])
 
 useEffect(() => {
-   const id = localStorage.getItem("draft_pr_id");
+   const id = location.state?.id || localStorage.getItem("draft_pr_id");
+   const code = location.state?.requestCode || localStorage.getItem("draft_pr_code") || "";
+   const editing = Boolean(location.state?.id || localStorage.getItem("edit_payment_request"));
+
    if (id) {
       setPrId(id);
    }
-}, []);
-
-useEffect(() => {
-   if (prId) {
-      fetchPRDetails(prId);
+   if (code) {
+      setPrCode(code);
    }
-}, [prId]);
+   setIsEditMode(editing);
+}, [location.state]);
 
-const fetchPRDetails = async (id) => {
+const fetchPRDetails = useCallback(async (id) => {
    try {
-      const res = await axios.get(`/payment-request/${id}`);
-      const data = res.data;
+      let data;
+
+      try {
+         const res = await axios.get(`/payment-request/edit/${id}`);
+         data = res.data;
+      } catch (editErr) {
+         const fallback = await axios.get(`/payment-request/request-details/${id}`);
+         data = {
+            request_code: fallback.data.request_code,
+            vendor_id: fallback.data.vendor,
+            invoices: (fallback.data.invoiceList || []).map((inv) => ({
+               invoice_no: inv.invoiceNo,
+               invoice_date: inv.invoiceDate,
+               gst_percent: inv.gst,
+               attachment: inv.file,
+               items: inv.items || []
+            }))
+         };
+      }
+
+      setPrCode(data.request_code || "");
 
       // set vendor
       setVendor(data.vendor_id);
 
       // map invoices
       const invoices = data.invoices.map(inv => ({
+         invoiceId: inv.invoice_id,
          invoiceNo: inv.invoice_no || "",
          invoiceDate: inv.invoice_date || "",
          gst: inv.gst_percent || 18,
          file: null,
+         existingFile: inv.attachment || null,
          items: inv.items.map(it => ({
             description: it.description || "",
             qty: it.qty || 1,
@@ -49,9 +76,15 @@ const fetchPRDetails = async (id) => {
       setInvoiceList(invoices.length ? invoices : []);
       
    } catch (err) {
-      console.log(err);
+      Swal.fire("Error", "Old payment request information could not be loaded", "error");
    }
-};
+}, []);
+
+useEffect(() => {
+   if (prId) {
+      fetchPRDetails(prId);
+   }
+}, [prId, fetchPRDetails]);
 
 const loadData = async ()=>{
    const res = await axios.get("/payment-request/my-requests")
@@ -191,13 +224,63 @@ const validateInvoices = () => {
       }
 
       // ✅ File upload required
-      if (!inv.file) {
+      if (!inv.file && !inv.existingFile) {
          Swal.fire(`Invoice ${i + 1}: Please upload invoice PDF`, "", "warning");
          return false;
       }
    }
 
    return true;
+};
+
+const saveInvoicesForRequest = async (paymentRequestId, { clearExisting = false } = {}) => {
+   if (clearExisting) {
+      await axios.delete(`/invoice/clear-request/${paymentRequestId}`);
+   }
+
+   for(const inv of invoiceList){
+
+      const formattedItems = inv.items.map(it => ({
+         description: it.description,
+         qty: Number(it.qty),
+         price: Number(it.price)
+      }));
+
+      const subtotal = formattedItems.reduce(
+         (s,item)=> s + (item.qty * item.price),0
+      );
+
+      const gstAmount = subtotal * Number(inv.gst) / 100;
+      const total = subtotal + gstAmount;
+
+      const res =  await axios.post("/invoice/add",{
+         payment_request_id: Number(paymentRequestId),
+         invoice_no: inv.invoiceNo,
+         invoice_date: inv.invoiceDate,
+         gst_percent: Number(inv.gst),
+         subtotal: subtotal,
+         gst_amount: gstAmount,
+         total_amount: total,
+         items: formattedItems,
+         attachment_path: inv.file ? null : inv.existingFile
+      });
+
+      const invoice_id = res.data.id;
+
+      if(inv.file){
+
+         const formData = new FormData()
+         formData.append("invoice_id", invoice_id)
+         formData.append("file", inv.file)
+
+         await axios.post("/attachments/upload", formData,{
+            headers:{
+               "Content-Type":"multipart/form-data"
+            }
+         });
+
+      }
+   }
 };
 
 // SAVE DRAFT
@@ -223,13 +306,22 @@ const handleSaveDraft = async ()=>{
 
         const id = res.data.id;
         const prId = res.data.pr_id;
+
+       await saveInvoicesForRequest(id, { clearExisting: false });
         setPrId(id);
+       setPrCode(prId);
       // ⭐ Store in localStorage (important if page refresh)
        localStorage.setItem("draft_pr_id",id);
+       localStorage.setItem("draft_pr_code",prId);
       //  Swal.fire("Draft Created","","success");
        Swal.fire("Draft Created",`Draft ID : ${prId}`,"success"
-       )
-      //  .then(()=>{window.location.href = "/submit"});
+       ).then(()=>{
+          navigate("/requests", {
+             state: {
+                highlightId: id
+             }
+          });
+       });
       
 
    }catch(err){
@@ -252,61 +344,29 @@ const handleSubmit = async ()=>{
    try{
 
       // ⭐ ADD INVOICES
-       for(const inv of invoiceList){
+      await saveInvoicesForRequest(finalPrId, { clearExisting: true });
 
-   const formattedItems = inv.items.map(it => ({
-      description: it.description,
-      qty: Number(it.qty),
-      price: Number(it.price)
-   }));
-
-   const subtotal = formattedItems.reduce(
-      (s,item)=> s + (item.qty * item.price),0
-   );
-
-   const gstAmount = subtotal * Number(inv.gst) / 100;
-   const total = subtotal + gstAmount;
-
-   const res =  await axios.post("/invoice/add",{
-      payment_request_id: Number(finalPrId),
-      invoice_no: inv.invoiceNo,
-      invoice_date: inv.invoiceDate,
-      gst_percent: Number(inv.gst),
-      subtotal: subtotal,
-      gst_amount: gstAmount,
-      total_amount: total,
-      items: formattedItems,   // ⭐ send converted items
-      // attachment_path: "demo.pdf"
-   });
-
-   const invoice_id = res.data.id;  
-
-   if(inv.file){
-
-      const formData = new FormData()
-      formData.append("invoice_id", invoice_id)
-      formData.append("file", inv.file)
-
-      await axios.post("/attachments/upload", formData,{
-         headers:{
-            "Content-Type":"multipart/form-data"
-         }
-      });
-
-   }
-
-}
       // ⭐ FINAL SUBMIT
        const res = await axios.post(`/payment-request/submit/${finalPrId}`);
        const id = res.data.id;
        const prId = res.data.pr_id;
         setPrId(id);
       Swal.fire("Success","Request ID : "+ prId + " Submitted for Approval","success"
-               ).then(()=>{window.location.href = "/requests"});
+               ).then(()=>{
+                  navigate("/requests", {
+                     state: {
+                        highlightId: finalPrId
+                     }
+                  });
+               });
 
       // ⭐ clear stored id
       localStorage.removeItem("draft_pr_id");
+      localStorage.removeItem("draft_pr_code");
+      localStorage.removeItem("edit_payment_request");
       setPrId(null);
+      setPrCode("");
+      setIsEditMode(false);
 
    }catch(err){
       Swal.fire("Error",err.response?.data?.detail || err.message,"error");
@@ -378,23 +438,22 @@ vendorList.map(v=>(
 </td>
 
 
-<label style={{marginLeft:"10px"}}>Search Payment Request </label>
-<select value={prId} onChange={(e)=>setPrId(e.target.value)} style={{
-width:"50%",
+{isEditMode && prId && (
+<>
+<label style={{marginLeft:"10px"}}>Payment Request </label>
+<input
+value={prCode || list.find((pr) => String(pr.id) === String(prId))?.request_code || ""}
+readOnly
+style={{
+width:"220px",
 padding:"6px",
 border:"1px solid #ddd",
-borderRadius:"5px"
-}}>
-<option value="">Payment Request For Editing </option>
-{
-   
-list.map(pr=>(
-<option key={pr.id} value={pr.id}>
-{pr.request_code}
-</option>
-))
-}
-</select> 
+borderRadius:"5px",
+background:"#f9fafb"
+}}
+/>
+</>
+)}
 
 </tr>
 </div>
@@ -606,6 +665,21 @@ View
 )
 }
 
+{
+!inv.file && inv.existingFile && (
+<button
+style={{marginLeft:"10px", background:"#10b981",
+color:"white",
+padding:"8px 14px",
+border:"none",
+borderRadius:"6px",  }}
+onClick={()=>window.open(buildApiUrl(inv.existingFile))}
+>
+View Existing
+</button>
+)
+}
+
 <br/><br/>
 
 <button onClick={()=>removeInvoice(invIndex)} style={{
@@ -658,6 +732,7 @@ width:"60%"
 <h3>Grand Total : ₹ {grandTotal}</h3>
 
 
+{!isEditMode && (
 <button
 onClick={handleSaveDraft}
 style={{
@@ -672,6 +747,7 @@ borderRadius:"6px"
 >
 Save Draft
 </button>
+)}
 
 <button
 onClick={handleSubmit}

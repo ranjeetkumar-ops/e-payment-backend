@@ -42,6 +42,16 @@ def my_warehouses(
         WHERE uw.user_id = :uid
     """), {"uid": user.id}).fetchall()
 
+    if not data and user.warehouse_id:
+        data = db.execute(text("""
+            SELECT
+                w.id,
+                w.warehouse_name,
+                1 AS is_default
+            FROM warehouses w
+            WHERE w.id = :warehouse_id
+        """), {"warehouse_id": user.warehouse_id}).fetchall()
+
     result = []
 
     for w in data:

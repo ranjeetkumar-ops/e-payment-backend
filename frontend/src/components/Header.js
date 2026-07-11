@@ -9,12 +9,22 @@ const [warehouses, setWarehouses] = useState([])
 const [showWarehouslist, setShowWarehouselist] = useState(false);
 const [showMenu,setShowMenu] = useState(false);
 
+const getStoredWarehouse = () => {
+  const value = localStorage.getItem("warehouse_id") || localStorage.getItem("warehouse") || "";
+  return value && value !== "null" && value !== "undefined" ? value : "";
+};
+
+const getStoredWarehouseName = () => {
+  const value = localStorage.getItem("warehouse_name") || "";
+  return value && value !== "null" && value !== "undefined" ? value : "Select Warehouse";
+};
+
 const [selectedWarehouse, setSelectedWarehouse] = useState(
-  localStorage.getItem("warehouse") || ""
+  getStoredWarehouse()
 )
 
 const [selectedWarehouseName, setSelectedWarehouseName] = useState(
-  localStorage.getItem("warehouse_name") || "Select Warehouse"
+  getStoredWarehouseName()
 )
 
 const navigate = useNavigate();
@@ -25,10 +35,11 @@ const loadWarehouses = useCallback(async ()=>{
     setWarehouses(res.data)
 
     const defaultWH = res.data.find(w => w.is_default === 1)
+    const selectedExists = selectedWarehouse && res.data.some(w => String(w.id) === String(selectedWarehouse));
 
-    if(defaultWH && !selectedWarehouse){
+    if(defaultWH && !selectedExists){
       selectWarehouse(defaultWH.id, defaultWH.warehouse_name)
-    }else if(res.data.length > 0 && !selectedWarehouse){
+    }else if(res.data.length > 0 && !selectedExists){
       const first = res.data[0]
       selectWarehouse(first.id, first.warehouse_name)
     }
@@ -40,6 +51,7 @@ const loadWarehouses = useCallback(async ()=>{
 
 const selectWarehouse = (id, name)=>{
   localStorage.setItem("warehouse", id)
+  localStorage.setItem("warehouse_id", id)
   localStorage.setItem("warehouse_name", name) 
 
   setSelectedWarehouse(id)

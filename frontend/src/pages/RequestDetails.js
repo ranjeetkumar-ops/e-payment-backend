@@ -3,7 +3,7 @@ import MainLayout from "../Layouts/MainLayout";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 import Swal from "sweetalert2";
-import axios from "../api/axios"
+import axios, { buildApiUrl } from "../api/axios"
 
 function RequestDetails(){
 
@@ -191,7 +191,7 @@ return(
 inv.file ? (
 
 <button
-onClick={() => window.open(`http://localhost:8000/${inv.file}`)}
+onClick={() => window.open(buildApiUrl(inv.file))}
 style={{
 background:"#10b981",
 color:"white",
@@ -216,7 +216,7 @@ View PDF
 
 <div style={{marginTop:"10px"}}>
 
-<button
+{/* <button
 onClick={handleApprove}
 style={{
 background:"#10b981",
@@ -225,12 +225,11 @@ padding:"10px 25px",
 border:"none",
 borderRadius:"6px",
 marginRight:"10px"
-}}
->
+}}>
 Approve
-</button>
+</button> */}
 
-<button
+{/* <button
 onClick={handleReject}
 style={{
 background:"#ef4444",
@@ -241,7 +240,7 @@ borderRadius:"6px"
 }}
 >
 Reject
-</button>
+</button> */}
 </div>
 
 </div>

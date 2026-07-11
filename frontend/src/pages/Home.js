@@ -1,138 +1,138 @@
+import { useCallback, useEffect, useMemo, useState } from "react";
 import MainLayout from "../Layouts/MainLayout";
+import axios from "../api/axios";
 
-function Home(){
+function Home() {
+  const role = (localStorage.getItem("role") || "USER").trim().toLowerCase();
+  const isAdmin = role === "admin";
+  const [requests, setRequests] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
-const requests = [
-{
-id:"REQ001",
-vendor:"ABC Logistics",
-amount:5000,
-status:"Pending",
-date:"10 Mar 2026"
-},
-{
-id:"REQ002",
-vendor:"XYZ Transport",
-amount:12000,
-status:"Approved",
-date:"09 Mar 2026"
-},
-{
-id:"REQ003",
-vendor:"Delhi Warehouse",
-amount:8500,
-status:"Rejected",
-date:"08 Mar 2026"
-}
-]
+  const loadDashboard = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError("");
+      const endpoint = isAdmin ? "/payment-request/list" : "/payment-request/my-requests";
+      const res = await axios.get(endpoint);
+      setRequests(Array.isArray(res.data) ? res.data : []);
+    } catch (err) {
+      setError("Dashboard data could not be loaded");
+    } finally {
+      setLoading(false);
+    }
+  }, [isAdmin]);
 
-return(
+  useEffect(() => {
+    loadDashboard();
+  }, [loadDashboard]);
 
-<MainLayout>
-<h2>Dashboard</h2>
+  const stats = useMemo(() => {
+    const statusOf = (request) => String(request.status || "").toLowerCase();
 
-{/* Dashboard Cards */}
+    return {
+      total: requests.length,
+      pending: requests.filter((request) => statusOf(request).includes("pending")).length,
+      approved: requests.filter((request) =>
+        ["approved", "paid", "pending_payment"].some((status) =>
+          statusOf(request).includes(status)
+        )
+      ).length,
+      rejected: requests.filter((request) => statusOf(request).includes("rejected")).length,
+    };
+  }, [requests]);
 
-<div style={{
-display:"flex",
-gap:"20px",
-marginTop:"20px"
-}}>
+  const recentRequests = useMemo(() => {
+    return [...requests]
+      .sort((a, b) => new Date(b.Submitted_at || 0) - new Date(a.Submitted_at || 0))
+      .slice(0, 5);
+  }, [requests]);
 
-<div style={{
-background:"#3b82f6",
-color:"white",
-padding:"20px",
-borderRadius:"8px",
-width:"200px"
-}}>
-<h3>Total Requests</h3>
-<p>15</p>
-</div>
+  const formatDate = (value) => {
+    if (!value) return "-";
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? "-" : date.toLocaleDateString("en-IN");
+  };
 
-<div style={{
-background:"#f59e0b",
-color:"white",
-padding:"20px",
-borderRadius:"8px",
-width:"200px"
-}}>
-<h3>Pending</h3>
-<p>5</p>
-</div>
+  return (
+    <MainLayout>
+      <h2>{isAdmin ? "Admin Dashboard" : "Dashboard"}</h2>
 
-<div style={{
-background:"#10b981",
-color:"white",
-padding:"20px",
-borderRadius:"8px",
-width:"200px"
-}}>
-<h3>Approved</h3>
-<p>8</p>
-</div>
+      {error && <p style={{ color: "#dc2626" }}>{error}</p>}
 
-<div style={{
-background:"#ef4444",
-color:"white",
-padding:"20px",
-borderRadius:"8px",
-width:"200px"
-}}>
-<h3>Rejected</h3>
-<p>2</p>
-</div>
+      <div style={{
+        display: "flex",
+        gap: "20px",
+        marginTop: "20px",
+        flexWrap: "wrap"
+      }}>
+        <DashboardCard title="Total Requests" value={loading ? "..." : stats.total} color="#3b82f6" />
+        <DashboardCard title="Pending" value={loading ? "..." : stats.pending} color="#f59e0b" />
+        <DashboardCard title="Approved" value={loading ? "..." : stats.approved} color="#10b981" />
+        <DashboardCard title="Rejected" value={loading ? "..." : stats.rejected} color="#ef4444" />
+      </div>
 
-</div>
+      <h3 style={{ marginTop: "40px" }}>Recent Requests</h3>
 
-{/* Recent Requests Table */}
+      <table style={{
+        width: "100%",
+        borderCollapse: "collapse",
+        background: "white"
+      }}>
+        <thead>
+          <tr style={{ background: "#f3f4f6" }}>
+            <th style={cellStyle}>Request ID</th>
+            {isAdmin && <th style={cellStyle}>Requester</th>}
+            <th style={cellStyle}>Vendor</th>
+            {isAdmin && <th style={cellStyle}>Warehouse</th>}
+            <th style={cellStyle}>Amount</th>
+            <th style={cellStyle}>Status</th>
+            <th style={cellStyle}>Date</th>
+          </tr>
+        </thead>
 
-<h3 style={{marginTop:"40px"}}>Recent Requests</h3>
+        <tbody>
+          {!loading && recentRequests.length === 0 && (
+            <tr>
+              <td style={cellStyle} colSpan={isAdmin ? "7" : "5"}>No requests found</td>
+            </tr>
+          )}
 
-<table style={{
-width:"100%",
-borderCollapse:"collapse",
-background:"white"
-}}>
-
-<thead>
-
-<tr style={{background:"#f3f4f6"}}>
-
-<th style={{padding:"10px",border:"1px solid #ddd"}}>Request ID</th>
-<th style={{padding:"10px",border:"1px solid #ddd"}}>Vendor</th>
-<th style={{padding:"10px",border:"1px solid #ddd"}}>Amount</th>
-<th style={{padding:"10px",border:"1px solid #ddd"}}>Status</th>
-<th style={{padding:"10px",border:"1px solid #ddd"}}>Date</th>
-
-</tr>
-
-</thead>
-
-<tbody>
-
-{requests.map((r)=>(
-
-<tr key={r.id}>
-
-<td style={{padding:"10px",border:"1px solid #ddd"}}>{r.id}</td>
-<td style={{padding:"10px",border:"1px solid #ddd"}}>{r.vendor}</td>
-<td style={{padding:"10px",border:"1px solid #ddd"}}>{r.amount}</td>
-<td style={{padding:"10px",border:"1px solid #ddd"}}>{r.status}</td>
-<td style={{padding:"10px",border:"1px solid #ddd"}}>{r.date}</td>
-
-</tr>
-
-))}
-
-</tbody>
-
-</table>
-
-</MainLayout>
-
-)
-
+          {recentRequests.map((request) => (
+            <tr key={request.id}>
+              <td style={cellStyle}>{request.request_code}</td>
+              {isAdmin && <td style={cellStyle}>{request.requester || "-"}</td>}
+              <td style={cellStyle}>{request.vendor}</td>
+              {isAdmin && <td style={cellStyle}>{request.warehouse || "-"}</td>}
+              <td style={cellStyle}>Rs. {Number(request.grand_total ?? request.amount ?? 0).toFixed(2)}</td>
+              <td style={cellStyle}>{request.status}</td>
+              <td style={cellStyle}>{formatDate(request.Submitted_at)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </MainLayout>
+  );
 }
 
-export default Home
+function DashboardCard({ title, value, color }) {
+  return (
+    <div style={{
+      background: color,
+      color: "white",
+      padding: "20px",
+      borderRadius: "8px",
+      width: "200px"
+    }}>
+      <h3>{title}</h3>
+      <p style={{ fontSize: "28px", fontWeight: 700, margin: 0 }}>{value}</p>
+    </div>
+  );
+}
+
+const cellStyle = {
+  padding: "10px",
+  border: "1px solid #ddd"
+};
+
+export default Home;

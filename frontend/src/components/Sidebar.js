@@ -8,9 +8,13 @@ import {
   FaBell,
   FaCog,
   FaFileInvoiceDollar,
+  FaChartBar,
   FaUserTie,
   FaUserShield,
   FaRobot,
+  FaWarehouse,
+  FaBuilding,
+  FaUserCog,
 } from "react-icons/fa";
 
 function Sidebar() {
@@ -18,8 +22,15 @@ function Sidebar() {
 // const username = localStorage.getItem("username")
 const name = localStorage.getItem("name") 
 const role = localStorage.getItem("role") || "USER"  
+const roleKey = role.trim().toLowerCase();
 const [adminOpen, setAdminOpen] = useState(false);
 const location = useLocation();
+
+const clearSubmitEditState = () => {
+localStorage.removeItem("draft_pr_id");
+localStorage.removeItem("draft_pr_code");
+localStorage.removeItem("edit_payment_request");
+};
 
 const menuItem = (path) => ({
 display:"flex",
@@ -88,18 +99,23 @@ flex:"1"
 <FaHome/> Dashboard
 </Link>
 
-<Link to="/submit" style={menuItem("/submit")}>
+<Link to="/submit" onClick={clearSubmitEditState} style={menuItem("/submit")}>
 <FaFileInvoice/> Submit Request
 </Link>
 
 <Link to="/requests" style={menuItem("/requests")}>
 <FaList/> My Requests
 </Link>
+
+<Link to="/reports" style={menuItem("/reports")}>
+<FaChartBar/> Reports
+</Link>
+
 <Link to="/approval" style={menuItem("/approvals")}>
   <FaCheckCircle/>Approval
 </Link>
 
-{(role === "Accounts" || role === "Admin") && (
+{(roleKey === "accounts" || roleKey === "admin") && (
   <Link to="/finance" style={menuItem("/finance")}>
     <FaFileInvoiceDollar/> Finance
   </Link>
@@ -120,7 +136,7 @@ flex:"1"
 <div>
 {/* ADMIN MENU */}
 
-{role === "Admin" &&
+{roleKey === "admin" &&
 <div
 style={{
 padding:"10px",
@@ -141,7 +157,19 @@ adminOpen && (
 <div style={{marginLeft:"20px"}}>
 
 <div style={{padding:"2px"}}>
-<Link to="/users" style={menuItem("/users")}><FaUserTie/>Users</Link>
+<Link to="/users#users" style={menuItem("/users")}><FaUserTie/>Users</Link>
+</div>
+
+<div style={{padding:"2px"}}>
+<Link to="/users#warehouses" style={menuItem("/users")}><FaWarehouse/>Warehouse</Link>
+</div>
+
+<div style={{padding:"2px"}}>
+<Link to="/users#vendors" style={menuItem("/users")}><FaBuilding/>Vendor</Link>
+</div>
+
+<div style={{padding:"2px"}}>
+<Link to="/users#assign" style={menuItem("/users")}><FaUserCog/>Assign</Link>
 </div>
 
 <div style={{padding:"2px"}}>

@@ -1,35 +1,66 @@
 import MainLayout from "../Layouts/MainLayout";
-import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useCallback, useEffect, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import axios from "../api/axios"
 
 
 function MyRequests(){
 
 const navigate = useNavigate();
+const location = useLocation();
+const role = (localStorage.getItem("role") || "USER").trim().toLowerCase();
+const isAdmin = role === "admin";
 
  const [list,setList] = useState([])
+ const [highlightId,setHighlightId] = useState(location.state?.highlightId || null)
+ const loadData = useCallback(async () =>{
+      const endpoint = isAdmin ? "/payment-request/list" : "/payment-request/my-requests";
+      const res = await axios.get(endpoint)
+      setList(res.data)
+   }, [isAdmin])
+
   useEffect(()=>{
       loadData()
-   },[])
- const loadData = async () =>{
-      const res = await axios.get("/payment-request/my-requests")
-      setList(res.data)
-   }
+   },[loadData])
+
+useEffect(() => {
+   if (!highlightId || list.length === 0) return;
+
+   const row = document.getElementById(`request-row-${highlightId}`);
+   row?.scrollIntoView({
+      behavior: "smooth",
+      block: "center"
+   });
+
+   const timer = setTimeout(() => {
+      setHighlightId(null);
+   }, 8000);
+
+   return () => clearTimeout(timer);
+}, [highlightId, list]);
 
 const handleEdit = (id) => {
-   // store id if needed
-   localStorage.setItem("draft_pr_id", id);
+   const selected = list.find((request) => request.id === id);
 
-   // navigate to submit/edit page
-   window.location.href = "/submit";
+   localStorage.setItem("draft_pr_id", id);
+   if (selected?.request_code) {
+      localStorage.setItem("draft_pr_code", selected.request_code);
+   }
+   localStorage.setItem("edit_payment_request", "true");
+
+   navigate("/submit", {
+      state: {
+         id,
+         requestCode: selected?.request_code || ""
+      }
+   });
 };
 const [isIdAsc, setIsIdAsc] = useState(true);
 
 const handleIdSort = () => {
   const sorted = [...list].sort((a, b) => {
-    const numA = parseInt(a.request_code.replace("PR", "")) || "NA PR";
-    const numB = parseInt(b.request_code.replace("PR", "")) || "NA PR";
+    const numA = parseInt(String(a.request_code || "").replace("PR", "")) || 0;
+    const numB = parseInt(String(b.request_code || "").replace("PR", "")) || 0;
 
     return isIdAsc ? numA - numB : numB - numA;
   });
@@ -41,6 +72,7 @@ const handleIdSort = () => {
 const [isStatusAsc, setIsStatusAsc] = useState(true);
 
 const getStatusRank = (status) => {
+  status = String(status || "");
   if (status === "Draft") return 1;
   if (status.includes("Pending")) return 2;
   if (status === "Approved") return 3;
@@ -59,13 +91,36 @@ const handleStatusSort = () => {
   setIsStatusAsc(!isStatusAsc);
 };
 
+const getStatusTooltip = (req) => {
+  if (req.next_approval) {
+    return `Approver: ${req.next_approval.approvers?.length ? req.next_approval.approvers.join(", ") : "Not assigned"}${req.next_approval.role_name ? ` (${req.next_approval.role_name})` : ""}`;
+  }
+
+  if (req.rejected_by) {
+    const levelText = req.rejected_by.level_no
+      ? `L${req.rejected_by.level_no}${req.rejected_by.level_name ? ` - ${req.rejected_by.level_name}` : ""}`
+      : "approval level";
+    const rejectedBy = req.rejected_by.name
+      ? `Cancelled at ${levelText} by: ${req.rejected_by.name}${req.rejected_by.role_name ? ` (${req.rejected_by.role_name})` : ""}`
+      : `Cancelled at ${levelText}`;
+
+    return req.rejected_by.reason
+      ? `${rejectedBy}\nReason: ${req.rejected_by.reason}`
+      : rejectedBy;
+  }
+
+  return "";
+};
+
 
 return(
 
 <MainLayout>
 
 
-<h2 style={{marginTop:0,marginBottom:"15px"}}>My Payment Requests</h2>
+<h2 style={{marginTop:0,marginBottom:"15px"}}>
+{isAdmin ? "All Payment Requests" : "My Payment Requests"}
+</h2>
 <div style={{
 background:"#fff",
 padding:"0px",
@@ -96,12 +151,14 @@ zIndex:10
 
 <tr>
 <th style={{padding:"10px"}} onClick={handleIdSort} >Request ID {isIdAsc ? "↑" : "↓"}</th>
+{isAdmin && <th>Requester</th>}
 <th>Vendor</th>
+{isAdmin && <th>Warehouse</th>}
 <th onClick={handleStatusSort}>Status {isStatusAsc ? "↑" : "↓"}</th>
 <th>Invoices</th>
 <th>Amount</th>
+{isAdmin && <th>UTR</th>}
 <th>Action</th>
- <th></th>
 
 </tr>
 
@@ -109,20 +166,36 @@ zIndex:10
 {
 list.map(req=>(
 
-<tr key={req.id} style={{textAlign:"center",borderBottom:"1px solid #eee"}}>
+<tr
+key={req.id}
+id={`request-row-${req.id}`}
+style={{
+textAlign:"center",
+borderBottom:"1px solid #eee",
+background: String(highlightId) === String(req.id) ? "#fef3c7" : "transparent",
+boxShadow: String(highlightId) === String(req.id) ? "inset 4px 0 0 #f59e0b" : "none",
+transition:"background 0.3s ease"
+}}
+>
 
 <td style={{padding:"10px"}}>{req.request_code}</td>
 
+{isAdmin && <td>{req.requester || "-"}</td>}
+
 <td>{req.vendor}</td>
+
+{isAdmin && <td>{req.warehouse || "-"}</td>}
 
 <td>
 
-<span style={{
+<span
+title={getStatusTooltip(req)}
+style={{
 padding:"4px 10px",
 borderRadius:"6px",
 background:
 req.status === "Draft" ? "#9ca3af" :
-req.status.includes("Pending") ? "#f59e0b" :
+String(req.status || "").includes("Pending") ? "#f59e0b" :
 req.status === "Approved" ? "#10b981" :
 req.status === "Rejected" ? "#ef4444" :
 "#60a5fa",
@@ -156,7 +229,9 @@ req.status === "Rejected" ? "#ef4444" :
 ₹ {req.amount?.toLocaleString()}
 </td>
 
-<td style={{ display: "flex", gap: "6px", alignItems: "center", justifyContent: "center" }}>
+{isAdmin && <td>{req.utr_number || "-"}</td>}
+
+<td style={{padding:"10px", whiteSpace:"nowrap"}}>
 
 <button
 onClick={()=>navigate("/requestdetails",{state:{id: req.id}})}
@@ -166,12 +241,12 @@ color:"white",
 border:"none",
 padding:"5px 12px",
 borderRadius:"5px",
-cursor:"pointer"
+cursor:"pointer",
+marginRight: req.status === "Draft" ? "8px" : "0"
 }}
 >
 Details
 </button>
- <div style={{ width: "70px", marginLeft: "8px" }}>
     {req.status === "Draft" && (
       <button onClick={() => handleEdit(req.id)}
         style={{
@@ -181,13 +256,11 @@ Details
           border: "none",
           borderRadius: "5px",
           cursor: "pointer",
-          width: "100%"
         }}
       >
         Edit
       </button>
     )}
-  </div>
 
 </td>
 

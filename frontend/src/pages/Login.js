@@ -42,9 +42,24 @@ localStorage.setItem("user_id",res.data.user_id)
 localStorage.setItem("username", username)
 localStorage.setItem("name", res.data.name)
 localStorage.setItem("role", res.data.role)
+
+if (res.data.warehouse) {
 localStorage.setItem("warehouse", res.data.warehouse)
+} else {
+localStorage.removeItem("warehouse")
+}
+
+if (res.data.warehouse_name) {
 localStorage.setItem("warehouse_name",res.data.warehouse_name);
+} else {
+localStorage.removeItem("warehouse_name")
+}
+
+if (res.data.warehouse_id) {
 localStorage.setItem("warehouse_id",res.data.warehouse_id)
+} else {
+localStorage.removeItem("warehouse_id")
+}
 
 navigate("/home")
 

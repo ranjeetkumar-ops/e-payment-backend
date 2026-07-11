@@ -212,8 +212,20 @@ def list_payment_requests(
     
     if role_name == "Accounts":
         query = query.filter(PaymentRequest.status == "pending_payment")
-    elif role_name != "Admin":
-        query = query.filter(PaymentRequest.created_by == user.id)
+
+    if role_name != "Admin":
+        query = query.filter(text("""
+            EXISTS (
+                SELECT 1
+                FROM user_warehouses uw
+                WHERE uw.user_id = :current_user_id
+                AND uw.warehouse_id = payment_requests.warehouse_id
+            )
+            OR payment_requests.warehouse_id = :default_warehouse_id
+        """)).params(
+            current_user_id=user.id,
+            default_warehouse_id=user.warehouse_id
+        )
 
     data = query.all()
 
@@ -227,7 +239,6 @@ def list_payment_requests(
 
         invoice_numbers = [inv[0] for inv in invoices]
         amount = float(pr.grand_total or 0)
-
         result.append({
             "id": pr.id,
             "request_code": pr.request_code,
