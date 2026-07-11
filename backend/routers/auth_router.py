@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends,HTTPException
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from backend.database import get_db
 from backend.models.user_model import User
 from backend.utils.hash import verify_password
@@ -26,7 +27,8 @@ def login(
     db: Session = Depends(get_db)
 ):
 
-    user = db.query(User).filter(User.username == form_data.username).first()
+    username = form_data.username.strip()
+    user = db.query(User).filter(func.lower(User.username) == username.lower()).first()
 
     if not user:
         raise HTTPException(status_code=400, detail="Invalid Username")
